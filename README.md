@@ -19,6 +19,7 @@
 - [Servicios](#servicios)
 - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
+- [Facturacion (CFDI)](#facturacion-cfdi)
 - [Base de datos](#base-de-datos)
 - [Comunicacion entre servicios](#comunicacion-entre-servicios)
 - [Seguridad](#seguridad)
@@ -40,20 +41,21 @@
                   [ API GATEWAY :4000 ]
                   | Routing, Auth, Rate Limit |
                              |
-            +----------------+----------------+
-            |                |                |
-     [ AUTH :4001 ]  [ PRODUCTS :4002 ] [ ORDERS :4003 ]
-     | Signup     |  | Products       | | Orders       |
-     | Signin     |  | Inventory      | | Cart         |
-     | Users/Roles|  | Categories     | | Checkout     |
-     +------------+  +----------------+ +--------------+
+            +----------------+----------------+----------------+
+            |                |                |                |
+     [ AUTH :4001 ]  [ PRODUCTS :4002 ] [ ORDERS :4003 ] [ BILLING :4005 ]
+     | Signup     |  | Products       | | Orders       | | Invoices     |
+     | Signin     |  | Inventory      | | Cart         | | CFDI 4.0     |
+     | Users/Roles|  | Categories     | | Checkout     | | Fiscal Data  |
+     +------------+  +----------------+ +--------------+ | SAT Catalogs |
+                                                         +--------------+
                                                |
                                         [ NOTIFICATION :4004 ]
                                         | Email, Webhooks, Push |
 
           [ PostgreSQL :5432 ]      [ Redis :6379 ]
           | Users, Products,        | Cache, Pub/Sub,   |
-          | Orders, Cart            | Rate Limit, Sess. |
+          | Orders, Cart, Invoices  | Rate Limit, Sess. |
 ```
 
 ### Flujo de una peticion
@@ -61,8 +63,10 @@
 1. **Cliente** envia `POST /api/orders` al **Gateway** (:4000)
 2. **Gateway** valida JWT, inyecta `X-User-Id` y reenvia al **Order Service** (:4003)
 3. **Order Service** crea la orden en PostgreSQL dentro de una transaccion
-4. **Order Service** publica evento `order.created` en **Redis Pub/Sub**
+4. **Order Service** publica evento `order.created` y `order.paid` en **Redis Pub/Sub**
 5. **Notification Service** recibe el evento y envia email de confirmacion
+6. **Billing Service** recibe `order.paid`, obtiene datos fiscales del usuario y genera automaticamente una factura borrador
+7. El usuario puede timbrar la factura via `POST /api/invoices/:id/stamp` generando un CFDI 4.0 con UUID del SAT
 
 ---
 
@@ -72,9 +76,10 @@
 |----------|--------|-------|-------------|
 | **Gateway** | `4000` | Express, http-proxy-middleware | Router central, auth, rate limiting, CORS |
 | **Auth Service** | `4001` | Express, JWT, bcrypt | Registro, login, refresh tokens, gestion de usuarios y roles |
-| **Product Service** | `4002` | Express, PostgreSQL | CRUD productos, categorias, inventario, busqueda, filtros |
+| **Product Service** | `4002` | Express, PostgreSQL | CRUD productos, categorias, inventario, busqueda, filtros (con tasa de IVA por producto) |
 | **Order Service** | `4003` | Express, PostgreSQL | Ordenes, carrito, checkout, transacciones |
 | **Notification Service** | `4004` | Express, Redis Pub/Sub | Listener de eventos, emails, webhooks |
+| **Billing Service** | `4005` | Express, PostgreSQL | Facturacion CFDI 4.0, timbrado, cancelacion, datos fiscales, catalogos SAT |
 
 ### Shared Package (`@ecommerce/shared`)
 
@@ -131,9 +136,11 @@ cp .env.example .env
 
 # 4. Iniciar servicios en terminales separadas
 npm run dev:gateway        # Terminal 1
-npm run dev:products       # Terminal 2
-npm run dev:orders         # Terminal 3
-npm run dev:notifications  # Terminal 4
+npm run dev:auth           # Terminal 2
+npm run dev:products       # Terminal 3
+npm run dev:orders         # Terminal 4
+npm run dev:notifications  # Terminal 5
+npm run dev:billing        # Terminal 6
 ```
 
 ---
@@ -264,6 +271,118 @@ curl "http://localhost:4000/api/products?page=1&limit=10&category=Electronics&se
 
 ---
 
+## Facturacion (CFDI)
+
+Sistema de facturacion electronica (CFDI 4.0) conforme al SAT de Mexico. Soporta creacion, timbrado (simulado), cancelacion y descarga de XML.
+
+### Datos Fiscales del Usuario
+
+| Method | Endpoint | Auth | Descripcion |
+|--------|----------|------|-------------|
+| `GET` | `/api/fiscal-data` | Si | Obtener mis datos fiscales |
+| `PUT` | `/api/fiscal-data` | Si | Crear o actualizar datos fiscales |
+| `POST` | `/api/fiscal-data` | Si | Crear datos fiscales (alias de PUT) |
+| `DELETE` | `/api/fiscal-data` | Si | Eliminar datos fiscales |
+
+**Ejemplo -- Registrar datos fiscales:**
+
+```bash
+curl -X PUT http://localhost:4000/api/fiscal-data \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "rfc": "XAXX010101000",
+    "legalName": "Juan Perez Lopez",
+    "taxRegime": "612",
+    "cfdiUsage": "G03",
+    "address": {
+      "street": "Av. Reforma 123",
+      "city": "Ciudad de Mexico",
+      "state": "CDMX",
+      "zipCode": "06600",
+      "country": "Mexico"
+    }
+  }'
+```
+
+### Facturas
+
+| Method | Endpoint | Auth | Descripcion |
+|--------|----------|------|-------------|
+| `POST` | `/api/invoices` | Si | Crear factura (manual o desde orden) |
+| `GET` | `/api/invoices` | Si | Listar facturas (paginado + filtros) |
+| `GET` | `/api/invoices/:id` | Si | Obtener factura con conceptos |
+| `PUT` | `/api/invoices/:id` | Si | Editar factura (antes de timbrar) |
+| `POST` | `/api/invoices/:id/stamp` | Si | Timbrar CFDI 4.0 |
+| `POST` | `/api/invoices/:id/cancel` | Si | Cancelar CFDI |
+| `GET` | `/api/invoices/:id/xml` | Si | Descargar XML del CFDI |
+| `GET` | `/api/invoices/:id/pdf` | Si | Vista HTML para imprimir |
+
+**Query parameters para `GET /api/invoices`:**
+
+| Param | Tipo | Default | Descripcion |
+|-------|------|---------|-------------|
+| `page` | number | `1` | Pagina |
+| `limit` | number | `20` | Items por pagina (max 100) |
+| `status` | string | - | Filtrar por estado: `pending`, `stamped`, `canceled` |
+| `dateFrom` | string | - | Fecha inicial (ISO 8601) |
+| `dateTo` | string | - | Fecha final (ISO 8601) |
+
+**Ejemplo -- Crear factura:**
+
+```bash
+curl -X POST http://localhost:4000/api/invoices \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "orderId": 1,
+    "paymentForm": "99",
+    "paymentMethod": "PPD",
+    "cfdiUsage": "G03",
+    "items": [
+      {
+        "description": "Laptop Pro 15",
+        "quantity": 1,
+        "unitPrice": 25000.00,
+        "ivaRate": 16.00
+      }
+    ]
+  }'
+```
+
+**Ejemplo -- Timbrar factura:**
+
+```bash
+curl -X POST http://localhost:4000/api/invoices/1/stamp \
+  -H "Authorization: Bearer <token>"
+```
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "cfdi_uuid": "a1b2c3d4-...",
+    "cfdi_status": "stamped",
+    "cfdi_stamped_at": "2025-01-15T10:30:00.000Z"
+  }
+}
+```
+
+### Catalogos SAT
+
+| Method | Endpoint | Auth | Descripcion |
+|--------|----------|------|-------------|
+| `GET` | `/api/catalogs/tax-regimes` | No | Listar regimenes fiscales SAT |
+| `GET` | `/api/catalogs/cfdi-usages` | No | Listar usos de CFDI SAT |
+| `GET` | `/api/catalogs/sat-products` | No | Buscar productos/servicios SAT |
+| `GET` | `/api/catalogs/sat-units` | No | Listar unidades de medida SAT |
+
+---
+
+## Base de datos
+
 ## Base de datos
 
 ### Esquema
@@ -283,23 +402,46 @@ users                      products                   orders
 +----------------+         | images (jsonb)         |   | notes            |
                            | tags (jsonb)           |   | created_at       |
 categories                 | is_active              |   | updated_at       |
-+----------------+         | created_at             |   +------------------+
-| id             |         | updated_at             |
-| name           |         +------------------------+   order_items
-| slug           |                                    +------------------+
-| description    |         carts                      | id               |
-| parent_id      |         +----------------+         | order_id         |
-| created_at     |         | id             |         | product_id       |
-| updated_at     |         | user_id        |         | quantity         |
-+----------------+         | created_at     |         | price            |
-                           +----------------+         | total            |
-                           cart_items                 +------------------+
-                           +----------------+
-                           | id             |
-                           | cart_id        |
-                           | product_id     |
-                           | quantity       |
-                           +----------------+
++----------------+         | tax_rate               |   +------------------+
+| id             |         | created_at             |
+| name           |         | updated_at             |   order_items
+| slug           |         +------------------------+   +------------------+
+| description    |                                    | id               |
+| parent_id      |         carts                      | order_id         |
+| created_at     |         +----------------+         | product_id       |
+| updated_at     |         | id             |         | quantity         |
++----------------+         | user_id        |         | price            |
+                           | created_at     |         | total            |
+                           +----------------+         +------------------+
+                           cart_items
+                           +----------------+         invoices
+                           | id             |         +-----------------------+
+                           | cart_id        |         | id                    |
+                           | product_id     |         | user_id               |
+                           | quantity       |         | order_id              |
+                           +----------------+         | invoice_serie/folio   |
+                                                      | rfc_emisor/receptor   |
+                           user_fiscal_data           | legal_name            |
+                           +----------------+         | tax_regime            |
+                           | id             |         | cfdi_usage            |
+                           | user_id        |         | payment_form/method   |
+                           | rfc            |         | subtotal, iva, total  |
+                           | legal_name     |         | cfdi_uuid             |
+                           | tax_regime     |         | cfdi_xml              |
+                           | cfdi_usage     |         | cfdi_status           |
+                           | address (jsonb)|         | notes                 |
+                           +----------------+         +-----------------------+
+
+                                                      invoice_items
+                                                      +-----------------------+
+                                                      | id                    |
+                                                      | invoice_id            |
+                                                      | description           |
+                                                      | quantity, unit_price  |
+                                                      | iva_rate, iva_amount  |
+                                                      | ieps_rate, ieps_amount|
+                                                      | total                 |
+                                                      +-----------------------+
 ```
 
 ### Inicializar base de datos
@@ -355,13 +497,16 @@ await eventBus.subscribe(EVENTS.ORDER_CREATED, async (data) => {
 |--------|---------------|---------------|-------------|
 | `order.created` | Order Service | Notification, Product | Nueva orden creada |
 | `order.cancelled` | Order Service | Notification, Product | Orden cancelada (liberar stock) |
-| `order.paid` | Order Service | Notification | Pago confirmado |
+| `order.paid` | Order Service | Notification, Billing | Pago confirmado (genera factura) |
 | `product.created` | Product Service | Notification | Nuevo producto |
 | `product.updated` | Product Service | Notification | Producto actualizado |
 | `product.deleted` | Product Service | Notification | Producto eliminado |
 | `inventory.low` | Product Service | Notification, Admin | Stock bajo umbral |
 | `payment.success` | Order Service | Notification | Pago exitoso (Stripe) |
 | `payment.failed` | Order Service | Notification, Order | Pago fallido |
+| `invoice.created` | Billing Service | Notification | Factura creada |
+| `invoice.stamped` | Billing Service | Notification | CFDI timbrado exitosamente |
+| `invoice.cancelled` | Billing Service | Notification | CFDI cancelado |
 
 ---
 
@@ -407,9 +552,11 @@ psql -h localhost -U postgres -d ecommerce_db -f db/init.sql
 
 # 5. Iniciar servicios
 npm run dev:gateway
+npm run dev:auth
 npm run dev:products
 npm run dev:orders
 npm run dev:notifications
+npm run dev:billing
 ```
 
 ### Workflow recomendado
@@ -460,6 +607,7 @@ docker compose down -v
 | `product-service` | `product-service:latest` | `4002:4002` |
 | `order-service` | `order-service:latest` | `4003:4003` |
 | `notification-service` | `notification-service:latest` | `4004:4004` |
+| `billing-service` | `billing-service:latest` | `4005:4005` |
 | `postgres` | `postgres:16-alpine` | `5432:5432` |
 | `redis` | `redis:7-alpine` | `6379:6379` |
 
@@ -474,6 +622,7 @@ curl http://localhost:4001/health   # Auth
 curl http://localhost:4002/health   # Products
 curl http://localhost:4003/health   # Orders
 curl http://localhost:4004/health   # Notifications
+curl http://localhost:4005/health   # Billing
 ```
 
 ---
@@ -517,6 +666,7 @@ npm run dev:auth         # Solo Auth Service
 npm run dev:products     # Solo Product Service
 npm run dev:orders       # Solo Order Service
 npm run dev:notifications # Solo Notification Service
+npm run dev:billing       # Solo Billing Service (facturacion CFDI)
 
 # Tests
 npm test                 # Todos los tests
@@ -570,6 +720,21 @@ npm run db:seed          # Seed data local
 |----------|-----------|---------|-------------|
 | `PORT` | No | `4003` | Puerto del servicio |
 | `ORDER_DB_*` | No | *(mismo que Product)* | Conexion a PostgreSQL |
+
+### Billing Service
+
+| Variable | Requerida | Default | Descripcion |
+|----------|-----------|---------|-------------|
+| `PORT` | No | `4005` | Puerto del servicio |
+| `BILLING_DB_HOST` | No | `localhost` | Host de PostgreSQL |
+| `BILLING_DB_PORT` | No | `5432` | Puerto de PostgreSQL |
+| `BILLING_DB_USER` | No | `postgres` | Usuario de PostgreSQL |
+| `BILLING_DB_PASSWORD` | No | `postgres` | Contrasena de PostgreSQL |
+| `BILLING_DB_DATABASE` | No | `ecommerce_db` | Nombre de la BD |
+| `BILLING_EMISOR_RFC` | No | `XAXX010101000` | RFC del emisor (negocio) |
+| `BILLING_EMISOR_NOMBRE` | No | `Mi Empresa` | Razon social del emisor |
+| `BILLING_EMISOR_REGIMEN` | No | `601` | Regimen fiscal del emisor |
+| `BILLING_EMISOR_CP` | No | `00000` | Codigo postal del emisor |
 
 ---
 
@@ -642,10 +807,38 @@ api-validator-api-productos/
 |   |   +-- tests/
 |   |       +-- validators.test.js
 |   |
-|   +-- notification-service/       # Escucha eventos y notifica
+|   |-- notification-service/       # Escucha eventos y notifica
+|   |   |-- package.json
+|   |   +-- src/
+|   |       +-- index.js
+|   |
+|   +-- billing-service/            # Facturacion CFDI 4.0 (SAT Mexico)
 |       |-- package.json
+|       |-- vitest.config.js
+|       |-- Dockerfile
 |       +-- src/
-|           +-- index.js
+|           |-- index.js            # Entry point + schema init (6 tablas fiscales)
+|           |-- app.js              # Express app
+|           |-- db/
+|           |   |-- connection.js
+|           |   +-- index.js
+|           |-- routes/
+|           |   +-- index.js        # 16 endpoints de facturacion
+|           |-- controllers/
+|           |   |-- invoices.controller.js
+|           |   |-- fiscal.controller.js
+|           |   +-- catalogs.controller.js
+|           |-- repositories/
+|           |   |-- invoices.repository.js
+|           |   +-- fiscal.repository.js
+|           |-- services/
+|           |   |-- tax.service.js  # Calculo de IVA, IEPS, retenciones
+|           |   |-- cfdi.service.js # Generacion XML CFDI 4.0 + timbrado
+|           |   +-- pdf.service.js  # Template HTML de factura
+|           +-- data/
+|               |-- tax-regimes.json  # 19 regimenes fiscales SAT
+|               |-- cfdi-usages.json  # 42 usos de CFDI SAT
+|               +-- sat-codes.json    # 100+ codigos SAT
 |
 +-- [legacy code -- API v2]         # Codigo anterior (referencia)
     |-- app.js
@@ -702,6 +895,7 @@ PGPASSWORD=tu_contrasena_real
 # Verificar que el servicio correspondiente esta corriendo
 curl http://localhost:4002/health  # Product service
 curl http://localhost:4003/health  # Order service
+curl http://localhost:4005/health  # Billing service
 
 # Ver logs del servicio
 docker compose logs product-service
@@ -718,6 +912,17 @@ docker compose up -d
 ---
 
 ## Changelog
+
+### v3.1.0 -- Facturacion CFDI
+- Billing Service con facturacion electronica CFDI 4.0 (SAT Mexico)
+- Datos fiscales de usuario (RFC, regimen, uso CFDI, direccion fiscal)
+- Creacion, timbrado, cancelacion y descarga de XML/PDF de facturas
+- Generacion de XML CFDI 4.0 con complemento de timbre fiscal digital
+- Calculo de impuestos: IVA (16%, 8%, 0%, exento), IEPS, retenciones ISR/IVA
+- Catalogos SAT: regimenes fiscales, usos CFDI, productos/servicios, unidades
+- Auto-generacion de factura al recibir evento `order.paid`
+- Tasa de IVA configurable por producto (`tax_rate`)
+- Gateway con rutas `/api/invoices`, `/api/fiscal-data`, `/api/catalogs`
 
 ### v3.0.0 -- Microservicios
 - Migracion de monolito a microservicios
