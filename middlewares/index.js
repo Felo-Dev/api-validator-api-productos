@@ -1,4 +1,2 @@
-export * as autJwt from './autJwt.js';
-import * as veritySignup from './veritySignup.js';
-
-export { veritySignup };
+export * as authJwt from './authJwt.js';
+export * as verifySignup from './verifySignup.js';

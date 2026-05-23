@@ -1,9 +1,9 @@
-// index.js
 import app from './app.js';
 import { pool } from './db/connection.js';
-import { createRoles } from './libs/initSteup.js';
+import { createRoles } from './libs/initSetup.js';
+import config from './config.js';
 
-const PORT = process.env.PORT || 4000;
+const PORT = config.PORT;
 
 async function start() {
     try {
@@ -11,11 +11,36 @@ async function start() {
         await client.query('SELECT 1');
         client.release();
         await createRoles();
-        app.listen(PORT, () => {
-            console.log(`El servidor esta corriendo en el puerto ${PORT}`);
+
+        const server = app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
         });
+
+        async function gracefulShutdown(signal) {
+            console.log(`\n${signal} received. Shutting down gracefully...`);
+            server.close(async () => {
+                console.log('HTTP server closed.');
+                try {
+                    await pool.end();
+                    console.log('Database connections closed.');
+                } catch (err) {
+                    console.error('Error closing database:', err);
+                    process.exit(1);
+                }
+                process.exit(0);
+            });
+
+            setTimeout(() => {
+                console.error('Forced shutdown after timeout.');
+                process.exit(1);
+            }, 10000);
+        }
+
+        process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+        process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
     } catch (error) {
-        console.error('Error connecting to the database:', error);
+        console.error('Error starting server:', error);
         process.exit(1);
     }
 }

@@ -1,20 +1,17 @@
-import { config as dotenvConfig } from 'dotenv';
+import config from '../config.js';
 import pkg from 'pg';
-
-dotenvConfig();
 
 const { Pool } = pkg;
 
 export const pool = new Pool({
-    host: process.env.PGHOST || '127.0.0.1',
-    port: Number(process.env.PGPORT || 5432),
-    user: process.env.PGUSER || 'postgres',
-    password: process.env.PGPASSWORD || '',
-    database: process.env.PGDATABASE || 'api_validator_db',
-    max: 10,
+    host: config.PGHOST,
+    port: config.PGPORT,
+    user: config.PGUSER,
+    password: config.PGPASSWORD,
+    database: config.PGDATABASE,
+    max: 20,
     idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
 });
 
 export const query = (text, params) => pool.query(text, params);
-
-

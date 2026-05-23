@@ -9,4 +9,7 @@ export async function getRolesByNames(roleNames) {
     return result.rows;
 }
 
-
+export async function getAllRoles() {
+    const result = await query(`SELECT id, name FROM roles ORDER BY name`);
+    return result.rows;
+}

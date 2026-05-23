@@ -1,24 +1,32 @@
 {
-  "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "pg": "^8.12.0"
-  },
-  "name": "api-validator",
-  "version": "1.0.0",
-  "type": "module",
-  "main": "index.js",
+  "name": "ecommerce-monorepo",
+  "version": "3.0.0",
+  "private": true,
+  "description": "E-commerce monorepo with microservices, Redis, and real product features",
+  "workspaces": [
+    "shared",
+    "gateway",
+    "services/*"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon   index.js"
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:gateway": "npm run dev --workspace=gateway",
+    "dev:auth": "npm run dev --workspace=auth-service",
+    "dev:products": "npm run dev --workspace=product-service",
+    "dev:orders": "npm run dev --workspace=order-service",
+    "dev:notifications": "npm run dev --workspace=notification-service",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:db:init": "docker compose exec postgres psql -U postgres -d ecommerce_db -f /docker-entrypoint-initdb.d/init.sql",
+    "docker:seed": "docker compose exec product-service node src/seed.js"
   },
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "devDependencies": {
-    "nodemon": "^3.1.0"
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "ioredis": "^5.10.1",
+    "redis": "^5.12.1"
   }
 }

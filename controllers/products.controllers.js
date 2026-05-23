@@ -1,34 +1,49 @@
 import * as productsRepo from '../repositories/products.repository.js';
-
+import { pool } from '../db/connection.js';
 
 export const createProducts = async (req, res) => {
     const { name, category, price, imgURL } = req.body;
     const productSaved = await productsRepo.createProduct({ name, category, price, imgURL });
-    res.json(productSaved);
+    await pool.query('INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)', [req.userId, 'create', 'product', productSaved.id]);
+    res.status(201).json(productSaved);
 };
 
 export const getProducts = async (req, res) => {
-    const products = await productsRepo.listProducts();
-    res.json(products);
+    const { page, limit, category, search } = req.query;
+    const result = await productsRepo.listProducts({ page, limit, category, search });
+    res.json({
+        data: result.data,
+        pagination: {
+            page: result.page,
+            limit: result.limit,
+            total: result.total,
+            pages: Math.ceil(result.total / result.limit),
+        },
+    });
 };
 
 export const getProductById = async (req, res) => {
     const product = await productsRepo.getProductById(req.params.productId);
-    res.status(200).json(product);
+    if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+    }
+    res.json(product);
 };
 
 export const updateProduct = async (req, res) => {
     const updated = await productsRepo.updateProduct(req.params.productId, req.body);
-    res.status(200).json(updated);
+    if (!updated) {
+        return res.status(404).json({ message: 'Product not found' });
+    }
+    await pool.query('INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)', [req.userId, 'update', 'product', req.params.productId]);
+    res.json(updated);
 };
 
 export const deleteProduct = async (req, res) => {
-    try {
-        const { productId } = req.params;
-        await productsRepo.deleteProduct(productId);
-        res.status(200).json({ message: 'Product deleted' });
-    } catch (error) {
-        console.error('Error al eliminar producto:', error);
-        res.status(500).json({ message: 'Error al eliminar producto' });
+    const deleted = await productsRepo.softDeleteProduct(req.params.productId);
+    if (!deleted) {
+        return res.status(404).json({ message: 'Product not found' });
     }
+    await pool.query('INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)', [req.userId, 'delete', 'product', req.params.productId]);
+    res.json({ message: 'Product deleted successfully' });
 };
