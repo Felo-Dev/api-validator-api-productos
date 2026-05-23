@@ -5,5 +5,6 @@ export default defineConfig({
         setupFiles: ['./tests/setup.js'],
         globals: true,
         environment: 'node',
+        passWithNoTests: true,
     },
 });
