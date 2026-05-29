@@ -5,6 +5,11 @@ import { autoCreateFromOrder } from './controllers/invoices.controller.js';
 
 const logger = createLogger('billing-service');
 
+/**
+ * @descripción Inicia el servicio de facturación: conecta la base de datos, inicializa Redis, el bus de eventos y el esquema, suscribe al evento ORDER_PAID y levanta el servidor HTTP.
+ * @returns {Promise<void>}
+ * @throws {Error} Si falla la conexión a BD, Redis o la inicialización del bus de eventos.
+ */
 async function start() {
     try {
         const client = await pool.connect();
@@ -25,6 +30,11 @@ async function start() {
             logger.info(`Billing service running on port ${config.PORT}`);
         });
 
+        /**
+         * @descripción Detiene gracefulmente el servicio: cierra el servidor HTTP, el bus de eventos, Redis y el pool de BD.
+         * @param {string} signal - Señal de terminación recibida (SIGTERM, SIGINT).
+         * @returns {Promise<void>}
+         */
         async function shutdown(signal) {
             logger.info(`${signal} received. Shutting down...`);
             server.close(async () => {
@@ -44,6 +54,11 @@ async function start() {
     }
 }
 
+/**
+ * @descripción Crea las tablas e índices necesarios en la base de datos si no existen (user_fiscal_data, invoice_series, invoices, invoice_items, cfdi_cancellations).
+ * @returns {Promise<void>}
+ * @throws {Error} Si falla la transacción de creación del esquema.
+ */
 async function initSchema() {
     const client = await pool.connect();
     try {

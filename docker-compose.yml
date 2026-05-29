@@ -129,6 +129,7 @@ services:
       - "4004:4004"
     environment:
       PORT: 4004
+      JWT_SECRET: dev-secret-change-in-production
       REDIS_HOST: redis
       REDIS_PORT: 6379
       NODE_ENV: development

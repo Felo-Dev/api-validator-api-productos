@@ -4,6 +4,11 @@ import { getRedisClient, closeRedis, eventBus, createLogger } from '@ecommerce/s
 
 const logger = createLogger('order-service');
 
+/**
+ * @descripción Inicia el servicio de pedidos: conecta BD, Redis, bus de eventos, crea esquemas y levanta el servidor HTTP.
+ * @returns {Promise<void>}
+ * @throws {Error} Si falla el inicio, termina el proceso con código 1.
+ */
 async function start() {
     try {
         const client = await pool.connect();
@@ -23,6 +28,11 @@ async function start() {
             logger.info(`Order service running on port ${config.PORT}`);
         });
 
+        /**
+         * @descripción Detiene el servidor, cierra Redis, bus de eventos y pool de BD.
+         * @param {string} signal - Señal recibida (SIGTERM o SIGINT).
+         * @returns {Promise<void>}
+         */
         async function shutdown(signal) {
             logger.info(`${signal} received. Shutting down...`);
             server.close(async () => {
@@ -42,6 +52,10 @@ async function start() {
     }
 }
 
+/**
+ * @descripción Crea las tablas `orders`, `order_items`, `carts` y `cart_items` con índices si no existen.
+ * @returns {Promise<void>}
+ */
 async function initSchema() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS orders (

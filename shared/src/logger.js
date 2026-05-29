@@ -1,3 +1,8 @@
+/**
+ * @descripción Crea un logger con prefijo del nombre del servicio para identificar las trazas
+ * @param {string} serviceName - Nombre del servicio que aparecerá en los mensajes de log
+ * @returns {Object} - Objeto con métodos info, warn, error y debug para realizar logs
+ */
 export function createLogger(serviceName) {
     const prefix = `[${serviceName}]`;
     return {

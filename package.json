@@ -19,7 +19,7 @@
     "test": "npm run test --workspaces --if-present",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:db:init": "docker compose exec postgres psql -U postgres -d ecommerce_db -f /docker-entrypoint-initdb.d/init.sql",
+    "docker:db:init": "docker compose exec -T postgres psql -U postgres -d ecommerce_db < db/init.sql",
     "docker:seed": "docker compose exec product-service node src/seed.js"
   },
   "engines": {

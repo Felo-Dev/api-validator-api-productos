@@ -8,6 +8,12 @@ import path from 'path';
 
 const router = Router();
 
+/**
+ * @descripción Maneja la subida de una imagen de producto. Devuelve la URL pública del archivo.
+ * @param {import('express').Request} req - Objeto de solicitud Express con el archivo image en form-data
+ * @param {import('express').Response} res - Objeto de respuesta Express
+ * @returns {void} - Responde con la URL y nombre del archivo subido
+ */
 router.post('/upload-image', [authJwt.verifyToken, upload.single('image')], (req, res) => {
     if (!req.file) {
         return res.status(400).json({ message: 'No file uploaded' });

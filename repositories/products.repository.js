@@ -4,6 +4,15 @@ const PRODUCT_SELECT = `SELECT id, name, category, price, img_url as "imgURL", c
 
 const ALLOWED_UPDATE_FIELDS = ['name', 'category', 'price', 'imgURL'];
 
+/**
+ * @descripción Crea un nuevo producto en la base de datos
+ * @param {Object} params - Datos del producto
+ * @param {string} params.name - Nombre del producto
+ * @param {string} [params.category] - Categoría del producto
+ * @param {number} params.price - Precio del producto
+ * @param {string} [params.imgURL] - URL de la imagen del producto
+ * @returns {Promise<Object>} - El producto creado con id, name, category, price, imgURL, created_at, updated_at
+ */
 export async function createProduct({ name, category, price, imgURL }) {
     const result = await query(
         `INSERT INTO products (name, category, price, img_url)
@@ -14,6 +23,15 @@ export async function createProduct({ name, category, price, imgURL }) {
     return result.rows[0];
 }
 
+/**
+ * @descripción Obtiene una lista paginada de productos con filtros opcionales por categoría y búsqueda
+ * @param {Object} [options] - Opciones de consulta
+ * @param {number} [options.page=1] - Número de página
+ * @param {number} [options.limit=20] - Cantidad de productos por página
+ * @param {string} [options.category] - Filtro por categoría (búsqueda parcial insensible a mayúsculas)
+ * @param {string} [options.search] - Término de búsqueda en nombre o categoría
+ * @returns {Promise<{data: Object[], total: number, page: number, limit: number}>} - Lista paginada con metadatos
+ */
 export async function listProducts({ page = 1, limit = 20, category, search } = {}) {
     const offset = (page - 1) * limit;
     const conditions = ['deleted_at IS NULL'];
@@ -51,6 +69,11 @@ export async function listProducts({ page = 1, limit = 20, category, search } = 
     };
 }
 
+/**
+ * @descripción Obtiene un producto por su ID
+ * @param {number} productId - ID del producto
+ * @returns {Promise<Object|null>} - El producto encontrado o null si no existe o fue eliminado
+ */
 export async function getProductById(productId) {
     const result = await query(
         `${PRODUCT_SELECT} FROM products WHERE id = $1 AND deleted_at IS NULL`,
@@ -59,6 +82,12 @@ export async function getProductById(productId) {
     return result.rows[0] || null;
 }
 
+/**
+ * @descripción Actualiza los campos permitidos de un producto (name, category, price, imgURL)
+ * @param {number} productId - ID del producto a actualizar
+ * @param {Object} fields - Objeto con los campos a actualizar
+ * @returns {Promise<Object|null>} - El producto actualizado o null si no hay campos válidos
+ */
 export async function updateProduct(productId, fields) {
     const allowed = Object.entries(fields).filter(([key]) => ALLOWED_UPDATE_FIELDS.includes(key));
     if (allowed.length === 0) return null;
@@ -80,6 +109,11 @@ export async function updateProduct(productId, fields) {
     return result.rows[0] || null;
 }
 
+/**
+ * @descripción Realiza un borrado lógico de un producto estableciendo la fecha de eliminación
+ * @param {number} productId - ID del producto a eliminar lógicamente
+ * @returns {Promise<Object|null>} - El producto marcado como eliminado o null si no existe
+ */
 export async function softDeleteProduct(productId) {
     const result = await query(
         `UPDATE products SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL
@@ -89,6 +123,11 @@ export async function softDeleteProduct(productId) {
     return result.rows[0] || null;
 }
 
+/**
+ * @descripción Elimina un producto de forma permanente de la base de datos
+ * @param {number} productId - ID del producto a eliminar
+ * @returns {Promise<void>}
+ */
 export async function deleteProduct(productId) {
     await query(`DELETE FROM products WHERE id = $1`, [productId]);
 }

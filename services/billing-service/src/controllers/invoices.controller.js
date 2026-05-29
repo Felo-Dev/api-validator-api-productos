@@ -14,6 +14,12 @@ const EMISOR_CONFIG = {
     codigoPostal: process.env.BILLING_EMISOR_CP || '00000',
 };
 
+/**
+ * @descripción Crea una nueva factura: valida datos fiscales del usuario, calcula totales, asigna folio y publica evento INVOICE_CREATED.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function createInvoice(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -73,6 +79,12 @@ export async function createInvoice(req, res) {
     created(res, invoice);
 }
 
+/**
+ * @descripción Lista las facturas del usuario con filtros opcionales (estado, fechas) y paginación.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function listInvoices(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -93,6 +105,12 @@ export async function listInvoices(req, res) {
     paginated(res, { ...result, page: Number(page) || 1, limit: Number(limit) || 20 });
 }
 
+/**
+ * @descripción Obtiene una factura por su ID junto con sus partidas (items).
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function getInvoice(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -104,6 +122,12 @@ export async function getInvoice(req, res) {
     success(res, { ...invoice, items });
 }
 
+/**
+ * @descripción Actualiza una factura pendiente: permite modificar datos generales y/o recalcular totales si se envían items.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function updateInvoice(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -138,6 +162,12 @@ export async function updateInvoice(req, res) {
     }
 }
 
+/**
+ * @descripción Timbra una factura pendiente: genera el XML del CFDI, lo envía al PAC y actualiza el registro.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function stampInvoice(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -165,6 +195,12 @@ export async function stampInvoice(req, res) {
     success(res, { ...updated, items });
 }
 
+/**
+ * @descripción Cancela una factura previamente timbrada y publica el evento INVOICE_CANCELLED.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function cancelInvoice(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -187,6 +223,12 @@ export async function cancelInvoice(req, res) {
     success(res, { ...updated, items });
 }
 
+/**
+ * @descripción Descarga el XML del CFDI de una factura timbrada.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function getInvoiceXml(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -202,6 +244,12 @@ export async function getInvoiceXml(req, res) {
     res.send(invoice.cfdi_xml);
 }
 
+/**
+ * @descripción Genera y retorna la representación HTML de la factura para su impresión/PDF.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ * @returns {Promise<void>}
+ */
 export async function getInvoicePdf(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
@@ -223,6 +271,14 @@ export async function getInvoicePdf(req, res) {
     res.send(html);
 }
 
+/**
+ * @descripción Crea automáticamente una factura a partir de los datos de una orden pagada. Utilizada por el suscriptor del evento ORDER_PAID.
+ * @param {Object} orderData - Datos de la orden pagada.
+ * @param {number} orderData.userId - ID del usuario.
+ * @param {number} orderData.orderId - ID de la orden.
+ * @param {Array} orderData.items - Lista de productos de la orden.
+ * @returns {Promise<Object|null>} La factura creada o null si no se pudo crear.
+ */
 export async function autoCreateFromOrder(orderData) {
     try {
         const userId = orderData.userId;

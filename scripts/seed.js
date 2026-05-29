@@ -1,6 +1,10 @@
 import { pool } from '../db/connection.js';
 import { hashPassword } from '../utils/password.js';
 
+/**
+ * @descripción Poblado inicial de la base de datos con roles, usuarios de prueba y productos de ejemplo
+ * @returns {Promise<void>}
+ */
 async function seed() {
     try {
         console.log('Starting seed...');

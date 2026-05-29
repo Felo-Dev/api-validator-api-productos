@@ -5,6 +5,11 @@ import config from './config.js';
 
 const PORT = config.PORT;
 
+/**
+ * @descripción Inicia el servidor HTTP, verifica la conexión a la base de datos, crea los roles iniciales
+ *           y configura los hooks de cierre graceful para SIGTERM y SIGINT
+ * @returns {Promise<void>}
+ */
 async function start() {
     try {
         const client = await pool.connect();
@@ -16,6 +21,11 @@ async function start() {
             console.log(`Server running on port ${PORT}`);
         });
 
+        /**
+         * @descripción Cierra el servidor HTTP y las conexiones a la base de datos de forma ordenada
+         * @param {string} signal - Señal de terminación recibida (SIGTERM o SIGINT)
+         * @returns {Promise<void>}
+         */
         async function gracefulShutdown(signal) {
             console.log(`\n${signal} received. Shutting down gracefully...`);
             server.close(async () => {

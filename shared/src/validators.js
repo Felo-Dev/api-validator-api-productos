@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/**
+ * @descripción Esquema Zod para validar parámetros de paginación
+ */
 export const paginationSchema = z.object({
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -7,6 +10,9 @@ export const paginationSchema = z.object({
     sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+/**
+ * @descripción Esquema Zod para validar la creación de productos
+ */
 export const createProductSchema = z.object({
     name: z.string().min(1).max(200),
     description: z.string().max(5000).optional(),
@@ -21,8 +27,14 @@ export const createProductSchema = z.object({
     taxRate: z.coerce.number().min(0).max(100).default(16.00),
 });
 
+/**
+ * @descripción Esquema Zod para validar la actualización parcial de productos (todos los campos opcionales)
+ */
 export const updateProductSchema = createProductSchema.partial();
 
+/**
+ * @descripción Esquema Zod para validar la creación de órdenes con items y dirección de envío
+ */
 export const createOrderSchema = z.object({
     items: z.array(z.object({
         productId: z.coerce.number().int().positive(),
@@ -40,6 +52,9 @@ export const createOrderSchema = z.object({
     notes: z.string().max(1000).optional(),
 });
 
+/**
+ * @descripción Esquema Zod para validar el registro de nuevos usuarios
+ */
 export const signupSchema = z.object({
     username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/),
     email: z.string().email(),
@@ -53,11 +68,17 @@ export const signupSchema = z.object({
     lastName: z.string().min(1).max(100).optional(),
 });
 
+/**
+ * @descripción Esquema Zod para validar el inicio de sesión de usuarios
+ */
 export const signinSchema = z.object({
     email: z.string().email(),
     password: z.string().min(1),
 });
 
+/**
+ * @descripción Esquema Zod para validar la creación de categorías
+ */
 export const createCategorySchema = z.object({
     name: z.string().min(1).max(100),
     slug: z.string().max(100).optional(),
@@ -65,11 +86,17 @@ export const createCategorySchema = z.object({
     parentId: z.coerce.number().int().positive().optional(),
 });
 
+/**
+ * @descripción Esquema Zod para validar la adición de items al carrito
+ */
 export const addCartItemSchema = z.object({
     productId: z.coerce.number().int().positive(),
     quantity: z.coerce.number().int().positive().max(999),
 });
 
+/**
+ * @descripción Esquema Zod para validar la actualización completa del carrito
+ */
 export const updateCartSchema = z.object({
     items: z.array(z.object({
         productId: z.coerce.number().int().positive(),
@@ -79,6 +106,9 @@ export const updateCartSchema = z.object({
 
 // --- Billing / Invoice Schemas ---
 
+/**
+ * @descripción Esquema Zod para validar la creación de facturas CFDI
+ */
 export const createInvoiceSchema = z.object({
     orderId: z.coerce.number().int().positive().optional(),
     invoiceType: z.enum(['I', 'E', 'T', 'N']).default('I'),
@@ -102,6 +132,9 @@ export const createInvoiceSchema = z.object({
     })).min(1),
 });
 
+/**
+ * @descripción Esquema Zod para validar la actualización parcial de facturas
+ */
 export const updateInvoiceSchema = z.object({
     paymentForm: z.enum(['01', '03', '04', '05', '06', '08', '12', '13', '14', '15', '17', '23', '24', '25', '26', '27', '28', '29', '30', '31', '99']).optional(),
     paymentMethod: z.enum(['PUE', 'PPD']).optional(),
@@ -121,6 +154,9 @@ export const updateInvoiceSchema = z.object({
     })).min(1).optional(),
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field required' });
 
+/**
+ * @descripción Esquema Zod para validar datos fiscales (RFC y dirección)
+ */
 export const fiscalDataSchema = z.object({
     rfc: z.string().regex(/^[A-ZÑ&]{3,4}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])[A-Z0-9]{2}[0-9A]$/, 'RFC inválido'),
     legalName: z.string().min(1).max(300),
@@ -141,11 +177,17 @@ export const fiscalDataSchema = z.object({
     }).optional(),
 });
 
+/**
+ * @descripción Esquema Zod para validar la cancelación de facturas
+ */
 export const cancelInvoiceSchema = z.object({
     reason: z.enum(['01', '02', '03', '04']),
     substituteUuid: z.string().uuid().optional(),
 });
 
+/**
+ * @descripción Esquema Zod para validar filtros de consulta de facturas
+ */
 export const invoiceFiltersSchema = z.object({
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -156,6 +198,11 @@ export const invoiceFiltersSchema = z.object({
     sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+/**
+ * @descripción Middleware de Express que valida el cuerpo de la petición con un esquema Zod
+ * @param {Object} schema - Esquema Zod para validar req.body
+ * @returns {Function} - Middleware de Express para validación
+ */
 export function validate(schema) {
     return (req, res, next) => {
         try {
@@ -169,6 +216,11 @@ export function validate(schema) {
     };
 }
 
+/**
+ * @descripción Middleware de Express que valida los query parameters con un esquema Zod
+ * @param {Object} schema - Esquema Zod para validar req.query
+ * @returns {Function} - Middleware de Express para validación
+ */
 export function validateQuery(schema) {
     return (req, res, next) => {
         try {
@@ -182,6 +234,11 @@ export function validateQuery(schema) {
     };
 }
 
+/**
+ * @descripción Middleware de Express que valida los parámetros de ruta con un esquema Zod
+ * @param {Object} schema - Esquema Zod para validar req.params
+ * @returns {Function} - Middleware de Express para validación
+ */
 export function validateParams(schema) {
     return (req, res, next) => {
         try {

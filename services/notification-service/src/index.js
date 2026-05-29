@@ -7,8 +7,17 @@ const logger = createLogger('notification-service');
 const app = express();
 app.use(express.json());
 
+/**
+ * @descripción Ruta de verificación de salud del servicio de notificaciones
+ * @param {Object} req - Objeto de petición de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ */
 app.get('/health', (req, res) => success(res, { service: 'notification-service', status: 'ok' }));
 
+/**
+ * @descripción Inicia el servidor del servicio de notificaciones, conecta Redis, suscribe eventos y configura apagado graceful
+ * @returns {Promise<void>}
+ */
 async function start() {
     await getRedisClient({ host: config.REDIS_HOST, port: config.REDIS_PORT });
     await eventBus.initialize({ host: config.REDIS_HOST, port: config.REDIS_PORT });
@@ -29,6 +38,11 @@ async function start() {
         logger.info(`Notification service running on port ${config.PORT}`);
     });
 
+    /**
+     * @descripción Manejador de apagado graceful que cierra el servidor, el bus de eventos y Redis
+     * @param {string} signal - Nombre de la señal recibida (SIGTERM, SIGINT)
+     * @returns {Promise<void>}
+     */
     async function shutdown(signal) {
         logger.info(`${signal} received. Shutting down...`);
         server.close(async () => {

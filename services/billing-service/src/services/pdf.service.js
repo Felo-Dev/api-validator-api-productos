@@ -1,3 +1,16 @@
+/**
+ * @descripción Genera el HTML completo de una factura para visualización e impresión, con datos del emisor, receptor, conceptos y totales.
+ * @param {Object} invoice - Datos de la factura.
+ * @param {Array} items - Partidas de la factura.
+ * @param {Object} fiscalData - Datos fiscales del receptor.
+ * @param {Object} [config] - Configuración de la empresa emisora.
+ * @param {string} [config.businessName='Mi Empresa S.A. de C.V.'] - Nombre del negocio.
+ * @param {string} [config.businessRfc='RFC123456XYZ'] - RFC del emisor.
+ * @param {string} [config.businessAddress] - Dirección del emisor.
+ * @param {string} [config.businessTaxRegime='601'] - Régimen fiscal del emisor.
+ * @param {string} [config.businessLogo=''] - Logo del negocio (base64 o URL).
+ * @returns {string} Cadena HTML de la factura.
+ */
 export function generateInvoiceHtml(invoice, items, fiscalData, config = {}) {
     const {
         businessName = 'Mi Empresa S.A. de C.V.',
@@ -16,8 +29,8 @@ export function generateInvoiceHtml(invoice, items, fiscalData, config = {}) {
     const itemsRows = items.map((item, i) => `
         <tr>
             <td>${i + 1}</td>
-            <td>${item.description}</td>
-            <td>${item.sat_unit_code || 'H87'}</td>
+            <td>${escapeHtml(item.description)}</td>
+            <td>${escapeHtml(item.sat_unit_code || 'H87')}</td>
             <td class="right">${item.quantity}</td>
             <td class="right">$${item.unit_price.toFixed(2)}</td>
             <td class="right">$${Number(item.discount || 0).toFixed(2)}</td>
@@ -74,10 +87,10 @@ export function generateInvoiceHtml(invoice, items, fiscalData, config = {}) {
 <body>
     <div class="header">
         <div class="business-info">
-            <h1>${businessName}</h1>
-            <p><strong>RFC:</strong> ${businessRfc}</p>
-            <p>${businessAddress}</p>
-            <p><strong>Régimen:</strong> ${businessTaxRegime}</p>
+            <h1>${escapeHtml(businessName)}</h1>
+            <p><strong>RFC:</strong> ${escapeHtml(businessRfc)}</p>
+            <p>${escapeHtml(businessAddress)}</p>
+            <p><strong>Régimen:</strong> ${escapeHtml(businessTaxRegime)}</p>
         </div>
         <div class="invoice-info">
             <h2>FACTURA</h2>
@@ -90,12 +103,12 @@ export function generateInvoiceHtml(invoice, items, fiscalData, config = {}) {
     <div class="section">
         <h3>DATOS DEL RECEPTOR</h3>
         <div class="info-grid">
-            <div><span class="label">RFC:</span> <span class="value">${invoice.rfc_receptor}</span></div>
-            <div><span class="label">Razón Social:</span> <span class="value">${invoice.legal_name}</span></div>
-            <div><span class="label">Régimen Fiscal:</span> <span class="value">${invoice.tax_regime}</span></div>
-            <div><span class="label">Uso CFDI:</span> <span class="value">${invoice.cfdi_usage}</span></div>
-            <div><span class="label">Forma de Pago:</span> <span class="value">${invoice.payment_form}</span></div>
-            <div><span class="label">Método de Pago:</span> <span class="value">${invoice.payment_method}</span></div>
+            <div><span class="label">RFC:</span> <span class="value">${escapeHtml(invoice.rfc_receptor)}</span></div>
+            <div><span class="label">Razón Social:</span> <span class="value">${escapeHtml(invoice.legal_name)}</span></div>
+            <div><span class="label">Régimen Fiscal:</span> <span class="value">${escapeHtml(invoice.tax_regime)}</span></div>
+            <div><span class="label">Uso CFDI:</span> <span class="value">${escapeHtml(invoice.cfdi_usage)}</span></div>
+            <div><span class="label">Forma de Pago:</span> <span class="value">${escapeHtml(invoice.payment_form)}</span></div>
+            <div><span class="label">Método de Pago:</span> <span class="value">${escapeHtml(invoice.payment_method)}</span></div>
         </div>
     </div>
 
@@ -144,12 +157,20 @@ export function generateInvoiceHtml(invoice, items, fiscalData, config = {}) {
         <p><strong>No. de Serie del SAT:</strong> SIMULACION</p>
     </div>` : ''}
 
-    ${invoice.notes ? `<div class="section"><p><strong>Notas:</strong> ${invoice.notes}</p></div>` : ''}
+    ${invoice.notes ? `<div class="section"><p><strong>Notas:</strong> ${escapeHtml(invoice.notes)}</p></div>` : ''}
 
     <div class="footer">
         <p>Este documento es una representación impresa del CFDI. Generado el ${new Date().toLocaleString('es-MX')}.</p>
-        <p>${businessName} &bull; RFC ${businessRfc}</p>
+        <p>${escapeHtml(businessName)} &bull; RFC ${escapeHtml(businessRfc)}</p>
     </div>
 </body>
-</html>`;
+</html>`;}
+
+function escapeHtml(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }

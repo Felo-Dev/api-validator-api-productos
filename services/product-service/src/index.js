@@ -4,6 +4,11 @@ import { getRedisClient, closeRedis, eventBus, createLogger } from '@ecommerce/s
 
 const logger = createLogger('product-service');
 
+/**
+ * @descripción Inicia el servicio de productos: conecta la BD, Redis, bus de eventos, crea esquemas y levanta el servidor HTTP.
+ * @returns {Promise<void>}
+ * @throws {Error} Si falla la conexión o el inicio, termina el proceso con código 1.
+ */
 async function start() {
     try {
         const client = await pool.connect();
@@ -19,6 +24,11 @@ async function start() {
             logger.info(`Product service running on port ${config.PORT}`);
         });
 
+        /**
+         * @descripción Detiene el servidor, cierra conexiones de Redis, bus de eventos y pool de BD.
+         * @param {string} signal - Señal recibida (SIGTERM o SIGINT).
+         * @returns {Promise<void>}
+         */
         async function shutdown(signal) {
             logger.info(`${signal} received. Shutting down...`);
             server.close(async () => {
@@ -38,6 +48,10 @@ async function start() {
     }
 }
 
+/**
+ * @descripción Crea las tablas `categories` y `products` con sus índices si no existen.
+ * @returns {Promise<void>}
+ */
 async function initSchema() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS categories (
@@ -67,7 +81,22 @@ async function initSchema() {
             created_at TIMESTAMPTZ DEFAULT now(),
             updated_at TIMESTAMPTZ DEFAULT now()
         );
+    `);
 
+    await pool.query(`
+        ALTER TABLE products
+            ADD COLUMN IF NOT EXISTS description TEXT,
+            ADD COLUMN IF NOT EXISTS compare_at_price NUMERIC(12,2),
+            ADD COLUMN IF NOT EXISTS stock INTEGER NOT NULL DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS reserved_stock INTEGER NOT NULL DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS sku TEXT UNIQUE,
+            ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]',
+            ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]',
+            ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
+            ADD COLUMN IF NOT EXISTS tax_rate NUMERIC(5,2) DEFAULT 16.00
+    `);
+
+    await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
         CREATE INDEX IF NOT EXISTS idx_products_price ON products(price);
         CREATE INDEX IF NOT EXISTS idx_products_stock ON products(stock);

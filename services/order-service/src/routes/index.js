@@ -16,4 +16,8 @@ router.put('/cart/items/:productId', ctl.updateCart);
 router.delete('/cart/items/:productId', ctl.removeFromCart);
 router.post('/cart/checkout', ctl.checkoutCart);
 
+/**
+ * @descripción Rutas de pedidos y carrito de compras. Monta endpoints CRUD con validación de esquemas.
+ * @returns {import('express').Router} Router de Express con las rutas configuradas.
+ */
 export default router;

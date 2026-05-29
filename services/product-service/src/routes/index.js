@@ -17,4 +17,8 @@ router.get('/categories/:categoryId', ctl.getCategoryById);
 router.put('/categories/:categoryId', validate(createCategorySchema.partial()), ctl.updateCategory);
 router.delete('/categories/:categoryId', ctl.deleteCategory);
 
+/**
+ * @descripción Rutas de productos y categorías. Monta los endpoints CRUD con validación de esquemas.
+ * @returns {import('express').Router} Router de Express con las rutas configuradas.
+ */
 export default router;

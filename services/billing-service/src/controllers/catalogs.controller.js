@@ -7,6 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const logger = createLogger('billing-service');
 
+/**
+ * @descripción Carga un archivo JSON desde el directorio de datos. Retorna un arreglo vacío si no existe o hay error.
+ * @param {string} filename - Nombre del archivo JSON a cargar.
+ * @returns {Array} Datos parseados del JSON o arreglo vacío.
+ */
 function loadJson(filename) {
     const filePath = join(__dirname, '..', 'data', filename);
     if (!existsSync(filePath)) {
@@ -21,16 +26,31 @@ function loadJson(filename) {
     }
 }
 
+/**
+ * @descripción Obtiene el catálogo de regímenes fiscales desde un archivo JSON.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ */
 export function getTaxRegimes(req, res) {
     const regimes = loadJson('tax-regimes.json');
     success(res, regimes);
 }
 
+/**
+ * @descripción Obtiene el catálogo de usos de CFDI desde un archivo JSON.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ */
 export function getCfdiUsages(req, res) {
     const usages = loadJson('cfdi-usages.json');
     success(res, usages);
 }
 
+/**
+ * @descripción Obtiene el catálogo de códigos de productos SAT con búsqueda y paginación.
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ */
 export function getSatProductCodes(req, res) {
     const codes = loadJson('sat-codes.json');
     const { search, page = 1, limit = 50 } = req.query;
@@ -59,6 +79,11 @@ export function getSatProductCodes(req, res) {
     });
 }
 
+/**
+ * @descripción Obtiene el catálogo de códigos de unidad SAT (definido estáticamente).
+ * @param {Object} req - Objeto de solicitud Express.
+ * @param {Object} res - Objeto de respuesta Express.
+ */
 export function getSatUnitCodes(req, res) {
     const codes = [
         { code: 'H87', name: 'Pieza', description: 'Pieza (unidad)' },

@@ -70,6 +70,11 @@ if (process.env.NODE_ENV !== 'production') {
     app.use(morgan('dev'));
 }
 
+/**
+ * @descripción Verifica el estado del servidor y la conexión a la base de datos
+ * @param {Object} req - Objeto de solicitud de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ */
 // Health check
 app.get('/health', async (req, res) => {
     try {
@@ -82,6 +87,11 @@ app.get('/health', async (req, res) => {
     }
 });
 
+/**
+ * @descripción Ruta de bienvenida que muestra información general de la API
+ * @param {Object} req - Objeto de solicitud de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ */
 // Welcome route
 app.get('/', (req, res) => {
     res.json({ message: 'API Validator - Products API', version: '2.1.0', docs: '/api-docs' });
@@ -98,11 +108,23 @@ app.use('/api/products', productsRoutes);
 app.use('/api/auth', authRoute);
 app.use('/api/users', userRoute);
 
+/**
+ * @descripción Middleware para manejar rutas no encontradas (404)
+ * @param {Object} req - Objeto de solicitud de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ */
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({ message: `Route ${req.method} ${req.originalUrl} not found` });
 });
 
+/**
+ * @descripción Middleware global de manejo de errores que categoriza y responde según el tipo de error
+ * @param {Error} err - Error capturado por Express
+ * @param {Object} req - Objeto de solicitud de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ * @param {Function} next - Función next de Express
+ */
 // Global error handler
 app.use((err, req, res, next) => {
     req.log.error(err);

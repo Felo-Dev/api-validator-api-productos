@@ -1,6 +1,17 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(__dirname, '../../.env');
+dotenv.config({ path: envPath });
+console.log('DEBUG: .env path:', envPath, 'JWT_SECRET:', process.env.JWT_SECRET ? 'set' : 'not set');
 
+/**
+ * @descripción Carga y congela la configuración de la aplicación desde variables de entorno
+ * @param {Object} [defaults={}] - Valores por defecto para propiedades de configuración
+ * @returns {Object} - Objeto de configuración congelado con valores de entorno
+ * @throws {Error} - Si faltan variables de entorno requeridas
+ */
 export const loadConfig = (defaults = {}) => {
     const required = ['JWT_SECRET'];
     const missing = required.filter(key => !process.env[key]);
@@ -21,13 +32,19 @@ export const loadConfig = (defaults = {}) => {
     });
 };
 
+/**
+ * @descripción Carga la configuración de base de datos desde variables de entorno con un prefijo dado
+ * @param {string} [prefix='PG'] - Prefijo para las variables de entorno de la base de datos
+ * @returns {Object} - Objeto con configuración de conexión a base de datos
+ */
 export const loadDbConfig = (prefix = 'PG') => {
+    const env = (suffix) => process.env[`${prefix}_${suffix}`] || process.env[`${prefix}${suffix}`];
     return {
-        host: process.env[`${prefix}HOST`] || '127.0.0.1',
-        port: Number(process.env[`${prefix}PORT`] || 5432),
-        user: process.env[`${prefix}USER`] || 'postgres',
-        password: process.env[`${prefix}PASSWORD`] || 'postgres',
-        database: process.env[`${prefix}DATABASE`] || 'ecommerce_db',
-        max: Number(process.env[`${prefix}MAX_CONNECTIONS`] || 10),
+        host: env('HOST') || '127.0.0.1',
+        port: Number(env('PORT') || 5432),
+        user: env('USER') || 'postgres',
+        password: env('PASSWORD') || 'postgres',
+        database: env('DATABASE') || 'ecommerce_db',
+        max: Number(env('MAX_CONNECTIONS') || 10),
     };
 };

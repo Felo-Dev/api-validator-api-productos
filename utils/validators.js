@@ -13,8 +13,11 @@ export const signupSchema = z.object({
 });
 
 export const signinSchema = z.object({
-    email: z.string().email('Invalid email format'),
+    email: z.string().email('Invalid email format').optional(),
+    username: z.string().optional(),
     password: z.string().min(1, 'Password is required'),
+}).refine(data => data.email || data.username, {
+    message: 'Email or username is required',
 });
 
 export const productSchema = z.object({
@@ -57,11 +60,21 @@ export const paginationSchema = z.object({
     search: z.string().optional(),
 });
 
+/**
+ * @descripción Formatea los errores de validación de Zod en un arreglo de mensajes legibles
+ * @param {Object} error - Error de validación de Zod
+ * @returns {string[]} - Arreglo con mensajes de error formateados como "campo: mensaje"
+ */
 function formatErrors(error) {
     const issues = error.issues || error.errors || [];
     return issues.map(e => `${e.path?.join('.') || 'body'}: ${e.message}`);
 }
 
+/**
+ * @descripción Middleware de Express que valida req.body contra un esquema Zod y guarda el resultado en req.validated
+ * @param {Object} schema - Esquema de Zod para validar el body de la solicitud
+ * @returns {Function} - Middleware de Express (req, res, next)
+ */
 export const validate = (schema) => (req, res, next) => {
     try {
         req.validated = schema.parse(req.body);
@@ -72,6 +85,11 @@ export const validate = (schema) => (req, res, next) => {
     }
 };
 
+/**
+ * @descripción Middleware de Express que valida y reemplaza req.query contra un esquema Zod
+ * @param {Object} schema - Esquema de Zod para validar los query params
+ * @returns {Function} - Middleware de Express (req, res, next)
+ */
 export const validateQuery = (schema) => (req, res, next) => {
     try {
         req.query = schema.parse(req.query);

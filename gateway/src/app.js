@@ -23,8 +23,6 @@ app.use(cors({
     origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
     credentials: true,
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
 const limiter = rateLimit({
@@ -36,6 +34,11 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+/**
+ * @descripción Ruta de verificación de salud del gateway que muestra el estado de los servicios
+ * @param {Object} req - Objeto de petición de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ */
 app.get('/health', (req, res) => {
     res.json({
         success: true,
@@ -51,13 +54,24 @@ app.get('/health', (req, res) => {
     });
 });
 
+/**
+ * @descripción Ruta raíz que muestra información general del API Gateway
+ * @param {Object} req - Objeto de petición de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ */
 app.get('/', (req, res) => {
     res.json({ success: true, data: { name: 'E-commerce API Gateway', version: '3.0.0', docs: '/api-docs' } });
 });
 
-const proxyOptions = (target) => ({
+/**
+ * @descripción Crea opciones de proxy para http-proxy-middleware con inyección de headers de usuario
+ * @param {string} target - URL del servicio destino al que redirigir las peticiones
+ * @returns {Object} - Opciones de configuración del proxy
+ */
+const proxyOptions = (target, rewritePath = false) => ({
     target,
     changeOrigin: true,
+    ...(rewritePath ? { pathRewrite: (path, req) => req.baseUrl + path } : {}),
     onProxyReq: (proxyReq, req) => {
         if (req.userId) {
             proxyReq.setHeader('X-User-Id', req.userId);
@@ -70,6 +84,20 @@ const proxyOptions = (target) => ({
     },
 });
 
+const authProxy = createProxyMiddleware(proxyOptions(config.AUTH_SERVICE_URL));
+const usersProxy = createProxyMiddleware(proxyOptions(config.AUTH_SERVICE_URL, true));
+const productProxy = createProxyMiddleware(proxyOptions(config.PRODUCT_SERVICE_URL, true));
+const orderProxy = createProxyMiddleware(proxyOptions(config.ORDER_SERVICE_URL, true));
+const notificationProxy = createProxyMiddleware(proxyOptions(config.NOTIFICATION_SERVICE_URL, true));
+const billingProxy = createProxyMiddleware(proxyOptions(config.BILLING_SERVICE_URL, true));
+
+/**
+ * @descripción Middleware que verifica y decodifica el token JWT del header Authorization. Rechaza la petición si el token es inválido o falta
+ * @param {Object} req - Objeto de petición de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ * @param {Function} next - Función next de Express
+ * @returns {void}
+ */
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -85,6 +113,13 @@ const verifyToken = (req, res, next) => {
     }
 };
 
+/**
+ * @descripción Middleware que decodifica opcionalmente el token JWT sin rechazar la petición si no está presente o es inválido
+ * @param {Object} req - Objeto de petición de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ * @param {Function} next - Función next de Express
+ * @returns {void}
+ */
 const optionalAuth = (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
@@ -99,22 +134,45 @@ const optionalAuth = (req, res, next) => {
     next();
 };
 
-app.use('/api/auth', createProxyMiddleware(proxyOptions(config.AUTH_SERVICE_URL)));
-app.use('/api/users', optionalAuth, createProxyMiddleware(proxyOptions(config.AUTH_SERVICE_URL)));
-app.use('/api/products', optionalAuth, createProxyMiddleware(proxyOptions(config.PRODUCT_SERVICE_URL)));
-app.use('/api/categories', optionalAuth, createProxyMiddleware(proxyOptions(config.PRODUCT_SERVICE_URL)));
-app.use('/api/orders', verifyToken, createProxyMiddleware(proxyOptions(config.ORDER_SERVICE_URL)));
-app.use('/api/cart', verifyToken, createProxyMiddleware(proxyOptions(config.ORDER_SERVICE_URL)));
-app.use('/api/payments', verifyToken, createProxyMiddleware(proxyOptions(config.ORDER_SERVICE_URL)));
-app.use('/api/notifications', verifyToken, createProxyMiddleware(proxyOptions(config.NOTIFICATION_SERVICE_URL)));
-app.use('/api/invoices', verifyToken, createProxyMiddleware(proxyOptions(config.BILLING_SERVICE_URL)));
-app.use('/api/fiscal-data', verifyToken, createProxyMiddleware(proxyOptions(config.BILLING_SERVICE_URL)));
-app.use('/api/catalogs', createProxyMiddleware(proxyOptions(config.BILLING_SERVICE_URL)));
+const forwardUserHeaders = (req, res, next) => {
+    if (req.userId) {
+        req.headers['x-user-id'] = String(req.userId);
+        req.headers['x-user-role'] = req.userRole || 'user';
+    }
+    next();
+};
 
+app.use('/api/auth', authProxy);
+app.use('/api/users', optionalAuth, forwardUserHeaders, usersProxy);
+app.use('/api/products', optionalAuth, forwardUserHeaders, productProxy);
+app.use('/api/categories', optionalAuth, forwardUserHeaders, productProxy);
+app.use('/api/orders', verifyToken, forwardUserHeaders, orderProxy);
+app.use('/api/cart', verifyToken, forwardUserHeaders, orderProxy);
+app.use('/api/payments', verifyToken, forwardUserHeaders, orderProxy);
+app.use('/api/notifications', verifyToken, forwardUserHeaders, notificationProxy);
+app.use('/api/invoices', verifyToken, forwardUserHeaders, billingProxy);
+app.use('/api/fiscal-data', verifyToken, forwardUserHeaders, billingProxy);
+app.use('/api/catalogs', billingProxy);
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+/**
+ * @descripción Middleware para rutas no encontradas (404)
+ * @param {Object} req - Objeto de petición de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ */
 app.use((req, res) => {
     res.status(404).json({ success: false, message: `Route ${req.method} ${req.originalUrl} not found` });
 });
 
+/**
+ * @descripción Middleware global de manejo de errores no capturados
+ * @param {Error} err - Objeto de error
+ * @param {Object} req - Objeto de petición de Express
+ * @param {Object} res - Objeto de respuesta de Express
+ * @param {Function} next - Función next de Express
+ */
 app.use((err, req, res, next) => {
     logger.error('Unhandled error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });

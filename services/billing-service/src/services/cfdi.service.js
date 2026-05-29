@@ -1,11 +1,21 @@
 import crypto from 'crypto';
 
-let SERIAL_NUMBER = 1;
-
+/**
+ * @descripción Genera un UUID aleatorio usando crypto.randomUUID.
+ * @returns {string} UUID versión 4.
+ */
 function generateUUID() {
     return crypto.randomUUID();
 }
 
+/**
+ * @descripción Genera el XML de un CFDI versión 4.0 con los datos de la factura, partidas, emisor y receptor, incluyendo el timbre fiscal digital simulado.
+ * @param {Object} invoice - Datos de la factura.
+ * @param {Array} items - Partidas de la factura.
+ * @param {Object} emisor - Datos del emisor (rfc, nombre, regimenFiscal, codigoPostal).
+ * @param {Object} [config] - Configuración adicional.
+ * @returns {{xml: string, uuid: string}} Objeto con el XML generado y el UUID asignado.
+ */
 export function generateCfdiXml(invoice, items, emisor, config = {}) {
     const uuid = generateUUID();
     const now = new Date();
@@ -56,15 +66,19 @@ export function generateCfdiXml(invoice, items, emisor, config = {}) {
     const complementoXml = `
                 <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/cfd/TimbreFiscalDigital/TimbreFiscalDigitalv11.xsd" Version="1.1" UUID="${uuidStr}" FechaTimbrado="${fecha}" RfcProvCertif="${emisor.rfc}" SelloCFD="simulacion_sello_${uuidStr.slice(0, 8)}" NoCertificadoSAT="00001000000000000000" SelloSAT="simulacion_sat_${uuidStr.slice(0, 8)}"/>`;
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Serie="${serie}" Folio="${folio}" Fecha="${fecha}" FormaPago="${invoice.payment_form}" NoCertificado="00001000000000000000" SubTotal="${invoice.subtotal.toFixed(2)}" Moneda="${invoice.currency || 'MXN'}" Total="${invoice.total.toFixed(2)}" TipoDeComprobante="${invoice.invoice_type}" Exportacion="01" MetodoPago="${invoice.payment_method}" LugarExpedicion="${emisor.codigoPostal || '00000'}">
+    const informacionGlobal = invoice.invoice_type === 'P' ? `
     <cfdi:InformacionGlobal>
         <cfdi:Anio>${now.getFullYear()}</cfdi:Anio>
         <cfdi:Meses>${String(now.getMonth() + 1).padStart(2, '0')}</cfdi:Meses>
         <cfdi:Dia>${String(now.getDate()).padStart(2, '0')}</cfdi:Dia>
-    </cfdi:InformacionGlobal>
+    </cfdi:InformacionGlobal>` : '';
+
+    const receptorName = invoice.legal_name && !/^\d+$/.test(invoice.legal_name) ? invoice.legal_name : '';
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Serie="${serie}" Folio="${folio}" Fecha="${fecha}" FormaPago="${invoice.payment_form}" NoCertificado="00001000000000000000" SubTotal="${invoice.subtotal.toFixed(2)}" Moneda="${invoice.currency || 'MXN'}" Total="${invoice.total.toFixed(2)}" TipoDeComprobante="${invoice.invoice_type}" Exportacion="01" MetodoPago="${invoice.payment_method}" LugarExpedicion="${emisor.codigoPostal || '00000'}">${informacionGlobal}
     <cfdi:Emisor Rfc="${escapeXml(emisor.rfc)}" Nombre="${escapeXml(emisor.nombre)}" RegimenFiscal="${emisor.regimenFiscal}"/>
-    <cfdi:Receptor Rfc="${escapeXml(invoice.rfc_receptor)}" Nombre="${escapeXml(parseFloat(invoice.legal_name) ? '' : invoice.legal_name)}" DomicilioFiscalReceptor="${emisor.codigoPostal || '00000'}" RegimenFiscalReceptor="${invoice.tax_regime}" UsoCFDI="${invoice.cfdi_usage}"/>
+    <cfdi:Receptor Rfc="${escapeXml(invoice.rfc_receptor)}" Nombre="${escapeXml(receptorName)}" DomicilioFiscalReceptor="${emisor.codigoPostal || '00000'}" RegimenFiscalReceptor="${invoice.tax_regime}" UsoCFDI="${invoice.cfdi_usage}"/>
     <cfdi:Conceptos>${itemsXml}
     </cfdi:Conceptos>${trasladosXml}${retencionesXml}
     <cfdi:Complemento>${complementoXml}
@@ -74,7 +88,13 @@ export function generateCfdiXml(invoice, items, emisor, config = {}) {
     return { xml, uuid: uuidStr };
 }
 
-export async function stampCfdi(xml, uuid) {
+/**
+ * @descripción Simula el timbrado de un CFDI ante el PAC. En esta implementación retorna los datos sin llamar a un PAC real.
+ * @param {string} xml - XML del CFDI a timbrar.
+ * @param {string} uuid - UUID asignado al CFDI.
+ * @returns {Object} Resultado del timbrado simulado con uuid, stampedAt, xml, pacRfc, satCertificate.
+ */
+export function stampCfdi(xml, uuid) {
     const fecha = new Date().toISOString();
     return {
         uuid,
@@ -85,7 +105,13 @@ export async function stampCfdi(xml, uuid) {
     };
 }
 
-export async function cancelCfdi(uuid, reason) {
+/**
+ * @descripción Simula la cancelación de un CFDI ante el SAT, generando un acuse de cancelación.
+ * @param {string} uuid - UUID del CFDI a cancelar.
+ * @param {string} reason - Motivo de la cancelación.
+ * @returns {Object} Resultado de la cancelación simulada con uuid, cancellationUuid, canceledAt, reason, acuse.
+ */
+export function cancelCfdi(uuid, reason) {
     const fecha = new Date().toISOString();
     return {
         uuid,
@@ -96,6 +122,11 @@ export async function cancelCfdi(uuid, reason) {
     };
 }
 
+/**
+ * @descripción Escapa caracteres especiales XML en una cadena de texto.
+ * @param {string} str - Cadena a escapar.
+ * @returns {string} Cadena con caracteres XML escapados.
+ */
 function escapeXml(str) {
     if (!str || typeof str !== 'string') return '';
     return str

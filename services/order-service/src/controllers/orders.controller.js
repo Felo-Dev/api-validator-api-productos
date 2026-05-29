@@ -4,6 +4,12 @@ import { getRedisClient } from '@ecommerce/shared';
 
 const logger = createLogger('order-service');
 
+/**
+ * @descripción Crea un pedido calculando subtotal, impuesto y costo de envío. Publica ORDER_CREATED y ORDER_PAID.
+ * @param {import('express').Request} req - Objeto de solicitud con req.validated.items, shippingAddress, paymentMethod, notes.
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function createOrder(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     const items = req.validated.items;
@@ -28,6 +34,12 @@ export async function createOrder(req, res) {
     created(res, order);
 }
 
+/**
+ * @descripción Lista pedidos del usuario con filtro opcional por estado y paginación.
+ * @param {import('express').Request} req - Objeto de solicitud con query params (page, limit, status).
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function listOrders(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     const { page, limit, status } = req.query;
@@ -35,6 +47,12 @@ export async function listOrders(req, res) {
     paginated(res, { ...result, page: Number(page) || 1, limit: Number(limit) || 20 });
 }
 
+/**
+ * @descripción Obtiene un pedido por ID con sus artículos. Responde 404 si no existe.
+ * @param {import('express').Request} req - Objeto de solicitud con req.params.orderId.
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function getOrder(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     const order = await orderRepo.getOrderById(req.params.orderId, userId);
@@ -43,6 +61,12 @@ export async function getOrder(req, res) {
     success(res, { ...order, items });
 }
 
+/**
+ * @descripción Cancela un pedido si su estado es 'pending' o 'processing'. Publica ORDER_CANCELLED.
+ * @param {import('express').Request} req - Objeto de solicitud con req.params.orderId.
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function cancelOrder(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     const order = await orderRepo.getOrderById(req.params.orderId, userId);
@@ -56,6 +80,12 @@ export async function cancelOrder(req, res) {
     success(res, updated);
 }
 
+/**
+ * @descripción Obtiene el carrito del usuario. Crea uno nuevo si no existe.
+ * @param {import('express').Request} req - Objeto de solicitud.
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function getCart(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     let cart = await orderRepo.getUserCart(userId);
@@ -66,6 +96,12 @@ export async function getCart(req, res) {
     success(res, { cart, items, total: items.reduce((sum, i) => sum + i.price * i.quantity, 0) });
 }
 
+/**
+ * @descripción Agrega un producto al carrito del usuario. Retorna el carrito actualizado.
+ * @param {import('express').Request} req - Objeto de solicitud con req.validated (productId, quantity).
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function addToCart(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     const { productId, quantity } = req.validated;
@@ -74,6 +110,12 @@ export async function addToCart(req, res) {
     success(res, { items, total: items.reduce((sum, i) => sum + i.price * i.quantity, 0) });
 }
 
+/**
+ * @descripción Actualiza la cantidad de un producto en el carrito del usuario.
+ * @param {import('express').Request} req - Objeto de solicitud con req.params.productId y req.body.quantity.
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function updateCart(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     const { productId } = req.params;
@@ -83,6 +125,12 @@ export async function updateCart(req, res) {
     success(res, { items, total: items.reduce((sum, i) => sum + i.price * i.quantity, 0) });
 }
 
+/**
+ * @descripción Elimina un producto del carrito del usuario.
+ * @param {import('express').Request} req - Objeto de solicitud con req.params.productId.
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function removeFromCart(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     await orderRepo.removeFromCart(userId, req.params.productId);
@@ -90,6 +138,12 @@ export async function removeFromCart(req, res) {
     success(res, { items, total: items.reduce((sum, i) => sum + i.price * i.quantity, 0) });
 }
 
+/**
+ * @descripción Convierte el carrito en un pedido: calcula totales, crea la orden, vacía el carrito y publica eventos.
+ * @param {import('express').Request} req - Objeto de solicitud con req.body (shippingAddress, paymentMethod, notes).
+ * @param {import('express').Response} res - Objeto de respuesta.
+ * @returns {Promise<void>}
+ */
 export async function checkoutCart(req, res) {
     const userId = req.userId || req.headers['x-user-id'];
     const items = await orderRepo.getCartItems(userId);
